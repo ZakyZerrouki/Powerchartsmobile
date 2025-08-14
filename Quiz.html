@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Power Chart · Quiz</title>
+<style>
+  :root{ --bg:#0d0f10; --panel:#14181b; --ink:#e7f1f7; --muted:#9fb0bd; --accent:#1db954; --accent-2:#00a8ff; --radius:14px; }
+  *{box-sizing:border-box}
+  body { background-color: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; padding: 20px; }
+  #quiz-container { background: linear-gradient(180deg,#151a1d, #0f1214); border: 1px solid #24313a; padding: 22px; border-radius: var(--radius); width: 92%; max-width: 760px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+  h1{ margin:6px 0 2px; font-size: 1.5rem; letter-spacing: 0.3px; }
+  .kicker{color:var(--muted); font-size:.9rem; margin-bottom:18px}
+  .progress{ width:100%; height:8px; background:#0b0e10; border:1px solid #23313a; border-radius:999px; margin:12px 0 16px; overflow:hidden; }
+  .bar{height:100%; width:0%; background:linear-gradient(90deg,var(--accent-2), var(--accent)); transition:width .35s ease}
+  #question{ font-size:1.1rem; line-height:1.4; margin:10px 0 12px; }
+  #options{ display:grid; gap:10px; grid-template-columns:1fr 1fr; }
+  button.option { background-color: #12171a; color: var(--ink); padding: 12px 14px; border: 1px solid #24313a; border-radius: 10px; cursor: pointer; font-size: 0.98rem; transition: transform 0.12s ease, border-color .2s ease, background .2s ease; }
+  button.option:hover{ transform: translateY(-1px); border-color:#2e4350; background:#0e1417; }
+  .footer{ display:flex; justify-content: space-between; align-items:center; margin-top:14px; color:var(--muted); font-size:.9rem }
+  .pill{ padding:6px 10px; background:#0e1417; border:1px solid #24313a; border-radius:999px; }
+  .tiny{font-size:.85rem; color:var(--muted)}
+</style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1db954">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+
+<div id="quiz-container">
+  <div class="kicker">Alpha · Demo</div>
+  <h1>Power Chart · Self-Betterment Quiz</h1>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <p id="question"></p>
+  <div id="options"></div>
+  <div class="footer">
+    <div class="pill"><span id="catName">—</span></div>
+    <div class="tiny"><span id="qIndex">1</span>/<span id="qTotal">0</span></div>
+  </div>
+</div>
+
+
+<script>
+/* ===== PowerChart Profiles & Storage Helpers ===== */
+const PC = (function(){
+  const PROFILE_KEY = "powerChart.profiles";
+
+  function loadProfiles(){
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return { activeId: null, byId: {} };
+    try { return JSON.parse(raw); } catch(e){ return { activeId: null, byId: {} }; }
+  }
+  function saveProfiles(state){
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(state));
+  }
+  function ensureDefaultProfile(){
+    let state = loadProfiles();
+    if (!state.activeId || !state.byId[state.activeId]){
+      const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+      state.byId[id] = { username: "Player One", pfp: null, enabledAttrs: ["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"], theme: {primary:"#1db954", alpha:25} };
+      state.activeId = id;
+      saveProfiles(state);
+    }
+    return state;
+  }
+  function getActiveProfile(){
+    const state = ensureDefaultProfile();
+    return { id: state.activeId, ...state.byId[state.activeId] };
+  }
+  function setActiveProfile(id){
+    const state = loadProfiles();
+    if (state.byId[id]){ state.activeId = id; saveProfiles(state); return true; }
+    return false;
+  }
+  function upsertProfile(id, data){
+    const state = loadProfiles();
+    if (!id){
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    }
+    state.byId[id] = { ...(state.byId[id]||{}), ...data };
+    if (!state.activeId) state.activeId = id;
+    saveProfiles(state);
+    return id;
+  }
+  function deleteProfile(id){
+    const state = loadProfiles();
+    delete state.byId[id];
+    if (state.activeId === id){
+      state.activeId = Object.keys(state.byId)[0] || null;
+    }
+    saveProfiles(state);
+    // purge per-profile keys
+    Object.keys(localStorage).forEach(k=>{
+      if (k.endsWith("."+id)) localStorage.removeItem(k);
+    });
+  }
+  function key(base){ const {id} = getActiveProfile(); return `${base}.${id}`; }
+  function keyFor(base, id){ return `${base}.${id}`; }
+
+  return { loadProfiles, saveProfiles, ensureDefaultProfile, getActiveProfile, setActiveProfile, upsertProfile, deleteProfile, key, keyFor };
+})();
+</script>
+
+<script>
+const questions = [
+  { category: "Intellect", question: "How many books or articles do you read per month?", options: ["None", "1", "2-3", "4-5", "6-7", "8+"] },
+  { category: "Intellect", question: "Can you solve complex problems without help?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Intellect", question: "How often do you learn a new skill?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Intellect", question: "Do you engage in logical reasoning games or puzzles?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Intellect", question: "How well do you retain new knowledge?", options: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+
+  { category: "Religion", question: "How many of the 5 daily prayers do you consistently perform?", options: ["0", "1", "2", "3", "4", "5"] },
+  { category: "Religion", question: "Do you fast during Ramadan completely?", options: ["Never", "Rarely", "Sometimes", "Mostly", "Yes, fully", "Always"] },
+  { category: "Religion", question: "Do you give charity consistently?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Religion", question: "Do you read or study religious texts regularly?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Religion", question: "Do you trust and rely on God in difficult situations?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+
+  { category: "Strength", question: "How many push-ups can you do in one set?", options: ["0", "1-5", "6-15", "16-30", "31-50", "51+"] },
+  { category: "Strength", question: "How many pull-ups can you do?", options: ["0", "1", "2-5", "6-10", "11-20", "20+"] },
+  { category: "Strength", question: "Can you lift heavy objects easily?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Strength", question: "How strong is your core (planks, sit-ups)?", options: ["Very weak", "Weak", "Average", "Strong", "Very strong", "Excellent"] },
+  { category: "Strength", question: "How balanced is your overall muscular development?", options: ["Very poor", "Poor", "Average", "Good", "Very good", "Excellent"] },
+
+  { category: "Endurance", question: "How tired are you after a 5 km run?", options: ["Exhausted", "Very tired", "Moderately tired", "Slightly tired", "Barely tired", "Not tired"] },
+  { category: "Endurance", question: "How long can you maintain a steady pace while running?", options: ["<5min", "5-10min", "10-20min", "20-30min", "30-60min", "60+min"] },
+  { category: "Endurance", question: "How long can you perform high-intensity activity?", options: ["<1min", "1-3min", "3-5min", "5-10min", "10-20min", "20+min"] },
+  { category: "Endurance", question: "Can you do long-duration cycling, swimming, or similar?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Endurance", question: "How quickly do you recover from fatigue?", options: ["Very slowly", "Slowly", "Average", "Fast", "Very fast", "Instant"] },
+
+  { category: "Social Life", question: "How many close friends do you regularly see?", options: ["0", "1", "2", "3-4", "5-7", "8+"] },
+  { category: "Social Life", question: "How well do you handle conflicts with others?", options: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+  { category: "Social Life", question: "Do you participate in community or social events?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Social Life", question: "Do you maintain healthy relationships?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Social Life", question: "How empathetic are you towards others?", options: ["Very low", "Low", "Average", "Good", "Very good", "High"] },
+
+  { category: "Mental Health", question: "How often do you feel calm and content?", options: ["Never", "Rarely", "Sometimes", "Often", "Very often", "Always"] },
+  { category: "Mental Health", question: "How well do you manage stress?", options: ["Very poorly", "Poorly", "Average", "Well", "Very well", "Excellent"] },
+  { category: "Mental Health", question: "Do you get enough restful sleep?", options: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { category: "Mental Health", question: "How often do you feel motivated?", options: ["Never", "Rarely", "Sometimes", "Often", "Very often", "Always"] },
+  { category: "Mental Health", question: "How well can you focus and concentrate?", options: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+
+  { category: "Career", question: "Role seniority (self-rated)", options: ["1", "2", "3", "4", "5", "6"] },
+  { category: "Career", question: "Scope of responsibility", options: ["Very low", "Low", "Moderate", "High", "Very high", "Executive"] },
+  { category: "Career", question: "Skill growth pace", options: ["Very slow", "Slow", "Average", "Fast", "Very fast", "Elite"] },
+  { category: "Career", question: "Major projects delivered last year", options: ["0", "1", "2", "3", "4", "5+"] },
+  { category: "Career", question: "Job satisfaction", options: ["1", "2", "3", "4", "5", "6"] }
+];
+
+let currentQuestion = 0;
+let scores = { "Intellect":0, "Religion":0, "Strength":0, "Endurance":0, "Social Life":0, "Mental Health":0, "Career":0 };
+const totalQs = questions.length;
+document.getElementById("qTotal").textContent = totalQs;
+
+function showQuestion() {
+  const ap = PC.getActiveProfile();
+  const enabled = ap.enabledAttrs || ["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"];
+  while (currentQuestion < questions.length && !enabled.includes(questions[currentQuestion].category)) currentQuestion++;
+
+  if (currentQuestion >= questions.length) return nextQuestion();
+
+  const q = questions[currentQuestion];
+  document.getElementById("question").innerText = q.question;
+  document.getElementById("catName").innerText = q.category;
+  document.getElementById("qIndex").innerText = currentQuestion + 1;
+  const optionsDiv = document.getElementById("options");
+  optionsDiv.innerHTML = "";
+  q.options.forEach((opt, index) => {
+    let btn = document.createElement("button");
+    btn.className = "option";
+    btn.innerText = opt;
+    btn.onclick = () => { scores[q.category] = (scores[q.category] || 0) + (index + 1); nextQuestion(); };
+    optionsDiv.appendChild(btn);
+  });
+  document.getElementById("bar").style.width = (((currentQuestion)/totalQs)*100).toFixed(2) + "%";
+}
+
+function nextQuestion() {
+  currentQuestion++;
+  if (currentQuestion < questions.length) {
+    showQuestion();
+  } else {
+    const categoryCounts = {};
+    questions.forEach(q => { categoryCounts[q.category] = (categoryCounts[q.category]||0)+1; });
+    const averages = {}, normalized = {}, grades = {};
+    function gradeFromAverage(avg1to6){
+      const pct = Math.max(0, Math.min(100, Math.round(((avg1to6 - 1) / 5) * 100)));
+      if (pct >= 95) return {grade:"S", color:"#ffd700", pct};
+      if (pct >= 85) return {grade:"A", color:"#1db954", pct};
+      if (pct >= 75) return {grade:"B", color:"#21bf73", pct};
+      if (pct >= 65) return {grade:"C", color:"#3ea0ff", pct};
+      if (pct >= 50) return {grade:"D", color:"#ffb020", pct};
+      if (pct >= 35) return {grade:"E", color:"#ff6b6b", pct};
+      return {grade:"F", color:"#ff4d4f", pct};
+    }
+    for (let cat in scores) {
+      const count = categoryCounts[cat] || 1;
+      const avg = scores[cat]/count;
+      averages[cat] = parseFloat(avg.toFixed(2));
+      const g = gradeFromAverage(avg);
+      normalized[cat] = g.pct;
+      grades[cat] = g.grade;
+    }
+    const payload = { timestamp: new Date().toISOString(), averages, normalized, grades, source:"quiz" };
+    localStorage.setItem(PC.key("powerChart.latest"), JSON.stringify(payload));
+    window.location.href = "Results.html";
+  }
+}
+
+showQuestion();
+</script>
+
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    });
+  }
+  </script>
+</body>
+</html>

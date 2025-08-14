@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Chart · Your Data (Editable Quiz)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0f0f10; --panel:#151a1c; --ink:#eaf2f7; --muted:#9fb0bd; --ring:#25323a; --radius:16px; }
+  body{ background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:0; }
+  header{ position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:rgba(15,16,17,.6); backdrop-filter: blur(6px); border-bottom:1px solid rgba(37,50,58,.35); }
+  a.btn, button.btn{ padding:10px 14px; border:1px solid var(--ring); background:#10161a; color:var(--ink); border-radius:10px; text-decoration:none; font-weight:600; cursor:pointer }
+  main{ padding:18px; max-width:1100px; margin:0 auto; }
+  .kicker{ color:var(--muted); margin-bottom:12px }
+  section.cat{ background:linear-gradient(180deg,#151a1d,#0f1214); border:1px solid var(--ring); border-radius:var(--radius); padding:14px; margin:12px 0; }
+  h2{ margin:0 0 8px; font-size:1.1rem }
+  .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:10px; }
+  .field{ display:flex; flex-direction:column; gap:6px; background:#0f1417; border:1px solid var(--ring); border-radius:10px; padding:10px; }
+  .field label{ font-size:.92rem; color:var(--muted) }
+  select{ padding:10px; border-radius:8px; border:1px solid #2a3943; background:#0b1013; color:var(--ink); }
+  .actions{ display:flex; gap:8px; justify-content:flex-end; margin:16px 0; flex-wrap:wrap }
+  .note{ color:var(--muted); font-size:.9rem }
+</style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1db954">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<header>
+  <a class="btn" href="Results.html">← Back to Results</a>
+  <strong>Your Data</strong>
+  <div style="display:flex; gap:8px">
+    <button class="btn" id="saveBtn">Save</button>
+    <button class="btn" id="recomputeBtn" title="Compute chart from your answers">Recompute Chart</button>
+  </div>
+</header>
+
+<script>
+/* ===== PowerChart Profiles & Storage Helpers ===== */
+const PC = (function(){
+  const PROFILE_KEY = "powerChart.profiles";
+  function loadProfiles(){ const raw = localStorage.getItem(PROFILE_KEY); if (!raw) return { activeId: null, byId: {} }; try { return JSON.parse(raw); } catch(e){ return { activeId: null, byId: {} }; } }
+  function saveProfiles(state){ localStorage.setItem(PROFILE_KEY, JSON.stringify(state)); }
+  function ensureDefaultProfile(){
+    let state = loadProfiles();
+    if (!state.activeId || !state.byId[state.activeId]){
+      const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+      state.byId[id] = { username: "Player One", pfp: null, enabledAttrs: ["Intellect","Religion","Strength","Endurance","Social","Mental","Career"], theme: {primary:"#1db954", alpha:25} };
+      state.activeId = id; saveProfiles(state);
+    }
+    return state;
+  }
+  function getActiveProfile(){ const state = ensureDefaultProfile(); return { id: state.activeId, ...state.byId[state.activeId] }; }
+  function key(base){ const {id} = getActiveProfile(); return `${base}.${id}`; }
+  return { getActiveProfile, key, loadProfiles, saveProfiles };
+})();
+</script>
+
+<main>
+  <div class="kicker" id="who"></div>
+  <div id="sections"></div>
+  <div class="actions">
+    <button class="btn" id="clearBtn">Clear All</button>
+  </div>
+  <p class="note">Tip: change answers anytime. This is the same content as the quiz, just editable in one place. All data is per profile and local.</p>
+</main>
+
+<script>
+// Use same questions as Quiz, but render as selects.
+// NOTE: On the radar, "Mental Health" is shown as "Mental" label; here we still keep the full category but store as "Mental" for consistency.
+
+const QUESTIONS = [
+  // INTELLECT
+  { c: "Intellect", q: "How many books or articles do you read per month?", o: ["None", "1", "2-3", "4-5", "6-7", "8+"] },
+  { c: "Intellect", q: "Can you solve complex problems without help?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Intellect", q: "How often do you learn a new skill?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Intellect", q: "Do you engage in logical reasoning games or puzzles?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Intellect", q: "How well do you retain new knowledge?", o: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+
+  // RELIGION
+  { c: "Religion", q: "How many of the 5 daily prayers do you consistently perform?", o: ["0", "1", "2", "3", "4", "5"] },
+  { c: "Religion", q: "Do you fast during Ramadan completely?", o: ["Never", "Rarely", "Sometimes", "Mostly", "Yes, fully", "Always"] },
+  { c: "Religion", q: "Do you give charity consistently?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Religion", q: "Do you read or study religious texts regularly?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Religion", q: "Do you trust and rely on God in difficult situations?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+
+  // STRENGTH
+  { c: "Strength", q: "How many push-ups can you do in one set?", o: ["0", "1-5", "6-15", "16-30", "31-50", "51+"] },
+  { c: "Strength", q: "How many pull-ups can you do?", o: ["0", "1", "2-5", "6-10", "11-20", "20+"] },
+  { c: "Strength", q: "Can you lift heavy objects easily?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Strength", q: "How strong is your core (planks, sit-ups)?", o: ["Very weak", "Weak", "Average", "Strong", "Very strong", "Excellent"] },
+  { c: "Strength", q: "How balanced is your overall muscular development?", o: ["Very poor", "Poor", "Average", "Good", "Very good", "Excellent"] },
+
+  // ENDURANCE
+  { c: "Endurance", q: "How tired are you after a 5 km run?", o: ["Exhausted", "Very tired", "Moderately tired", "Slightly tired", "Barely tired", "Not tired"] },
+  { c: "Endurance", q: "How long can you maintain a steady pace while running?", o: ["<5min", "5-10min", "10-20min", "20-30min", "30-60min", "60+min"] },
+  { c: "Endurance", q: "How long can you perform high-intensity activity?", o: ["<1min", "1-3min", "3-5min", "5-10min", "10-20min", "20+min"] },
+  { c: "Endurance", q: "Can you do long-duration cycling, swimming, or similar?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Endurance", q: "How quickly do you recover from fatigue?", o: ["Very slowly", "Slowly", "Average", "Fast", "Very fast", "Instant"] },
+
+  // SOCIAL LIFE
+  { c: "Social", q: "How many close friends do you regularly see?", o: ["0", "1", "2", "3-4", "5-7", "8+"] },
+  { c: "Social", q: "How well do you handle conflicts with others?", o: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+  { c: "Social", q: "Do you participate in community or social events?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Social", q: "Do you maintain healthy relationships?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Social", q: "How empathetic are you towards others?", o: ["Very low", "Low", "Average", "Good", "Very good", "High"] },
+
+  // MENTAL (shortened from Mental Health)
+  { c: "Mental", q: "How often do you feel calm and content?", o: ["Never", "Rarely", "Sometimes", "Often", "Very often", "Always"] },
+  { c: "Mental", q: "How well do you manage stress?", o: ["Very poorly", "Poorly", "Average", "Well", "Very well", "Excellent"] },
+  { c: "Mental", q: "Do you get enough restful sleep?", o: ["Never", "Rarely", "Sometimes", "Often", "Usually", "Always"] },
+  { c: "Mental", q: "How often do you feel motivated?", o: ["Never", "Rarely", "Sometimes", "Often", "Very often", "Always"] },
+  { c: "Mental", q: "How well can you focus and concentrate?", o: ["Very poorly", "Poorly", "Average", "Good", "Very good", "Excellent"] },
+
+  // CAREER
+  { c: "Career", q: "Role seniority (self-rated)", o: ["1", "2", "3", "4", "5", "6"] },
+  { c: "Career", q: "Scope of responsibility", o: ["Very low", "Low", "Moderate", "High", "Very high", "Executive"] },
+  { c: "Career", q: "Skill growth pace", o: ["Very slow", "Slow", "Average", "Fast", "Very fast", "Elite"] },
+  { c: "Career", q: "Major projects delivered last year", o: ["0", "1", "2", "3", "4", "5+"] },
+  { c: "Career", q: "Job satisfaction", o: ["1", "2", "3", "4", "5", "6"] }
+];
+
+// Render sections per enabled attributes
+const ap = PC.getActiveProfile();
+const enabled = ap.enabledAttrs || ["Intellect","Religion","Strength","Endurance","Social","Mental","Career"];
+document.getElementById('who').textContent = 'Editing profile: ' + (ap.username || 'Player One');
+
+const byCat = {};
+QUESTIONS.forEach((q, i) => { if (enabled.includes(q.c)) { (byCat[q.c] = byCat[q.c] || []).push({i, ...q}); } });
+
+const sections = document.getElementById('sections');
+Object.keys(byCat).forEach(cat => {
+  const list = byCat[cat];
+  const sec = document.createElement('section'); sec.className="cat";
+  const fields = list.map((item, idx) => {
+    const qid = `${cat}__${item.i}`;
+    const opts = item.o.map((txt, oi) => `<option value="${oi+1}">${txt}</option>`).join('');
+    return `<div class="field"><label for="${qid}">${item.q}</label><select id="${qid}">${opts}</select></div>`;
+  }).join('');
+  sec.innerHTML = `<h2>${cat}</h2><div class="grid">${fields}</div>`;
+  sections.appendChild(sec);
+});
+
+// Load existing answers (if any)
+const ANSWERS_KEY = PC.key("powerChart.quizAnswers");
+const existing = JSON.parse(localStorage.getItem(ANSWERS_KEY) || "{}");
+Object.entries(existing).forEach(([qid, val]) => {
+  const el = document.getElementById(qid);
+  if (el) el.value = val;
+});
+
+// Save
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const data = {};
+  document.querySelectorAll('select').forEach(sel => { if (sel.value) data[sel.id] = parseInt(sel.value, 10); });
+  localStorage.setItem(ANSWERS_KEY, JSON.stringify(data));
+  alert("Saved ✓");
+});
+
+// Recompute chart from answers (like the quiz)
+function recompute(){
+  const data = JSON.parse(localStorage.getItem(ANSWERS_KEY) || "{}");
+  // Build scores per category using averages (1..6)
+  const perCat = {};
+  Object.keys(data).forEach(qid => {
+    const [cat] = qid.split('__');
+    perCat[cat] = perCat[cat] || [];
+    perCat[cat].push(data[qid]); // already 1..6
+  });
+
+  const allCats = Object.keys(byCat); // only enabled categories are rendered
+  const averages = {}, normalized = {}, grades = {};
+
+  function gradeFromAverage(avg1to6){
+    const pct = Math.max(0, Math.min(100, Math.round(((avg1to6 - 1) / 5) * 100)));
+    if (pct >= 95) return {grade:"S", pct};
+    if (pct >= 85) return {grade:"A", pct};
+    if (pct >= 75) return {grade:"B", pct};
+    if (pct >= 65) return {grade:"C", pct};
+    if (pct >= 50) return {grade:"D", pct};
+    if (pct >= 35) return {grade:"E", pct};
+    return {grade:"F", pct};
+  }
+
+  allCats.forEach(cat => {
+    const arr = perCat[cat] || [];
+    const avg = arr.length ? (arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
+    averages[cat] = parseFloat(avg.toFixed(2));
+    const g = gradeFromAverage(avg);
+    normalized[cat] = g.pct;
+    grades[cat] = g.grade;
+  });
+
+  const payload = { timestamp: new Date().toISOString(), averages, normalized, grades, source:"your-data-quiz" };
+  localStorage.setItem(PC.key("powerChart.latest"), JSON.stringify(payload));
+  alert("Chart recomputed ✓ — open Results to see the update.");
+}
+document.getElementById('recomputeBtn').addEventListener('click', recompute);
+
+// Clear
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  if (confirm("Clear all saved answers for this profile?")) {
+    localStorage.removeItem(ANSWERS_KEY);
+    location.reload();
+  }
+});
+</script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    });
+  }
+  </script>
+</body>
+</html>

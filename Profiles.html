@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Chart · Profiles</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0f0f10; --panel:#151a1c; --ink:#eaf2f7; --muted:#9fb0bd; --ring:#25323a; --radius:16px; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+  header{ position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:rgba(15,16,17,.6); backdrop-filter: blur(6px); border-bottom:1px solid rgba(37,50,58,.35); }
+  a.btn, button.btn{ padding:10px 14px; border:1px solid var(--ring); background:#10161a; color:var(--ink); border-radius:10px; text-decoration:none; font-weight:600; cursor:pointer }
+  main{ max-width:1000px; margin:0 auto; padding:18px }
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px }
+  .panel{ background:linear-gradient(180deg,#151a1d,#0f1214); border:1px solid var(--ring); border-radius:var(--radius); padding:14px }
+  h2{ margin:0 0 8px }
+  .list{ display:grid; gap:8px; }
+  .row{ display:flex; align-items:center; justify-content:space-between; padding:10px; background:#0f1417; border:1px solid var(--ring); border-radius:12px }
+  .left{ display:flex; align-items:center; gap:10px }
+  .pfp{ width:36px; height:36px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,.12); object-fit:cover }
+  .muted{ color:var(--muted); font-size:.9rem }
+  .inputs{ display:grid; gap:10px; grid-template-columns: 1fr 1fr; }
+  input[type="text"]{ padding:10px; border-radius:10px; border:1px solid #2a3943; background:#0b1013; color:var(--ink); width:100% }
+  input[type="file"]{ color:var(--muted) }
+  .attrs{ display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-top:8px }
+  label.chk{ display:flex; align-items:center; gap:8px; background:#0f1417; border:1px solid var(--ring); border-radius:10px; padding:8px }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; justify-content:flex-end }
+</style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1db954">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<header>
+  <a class="btn" href="index.html">← Home</a>
+  <strong>Profiles</strong>
+  <a class="btn" href="Results.html">Open Results</a>
+</header>
+
+<script>
+/* ===== PowerChart Profiles & Storage Helpers ===== */
+const PC = (function(){
+  const PROFILE_KEY = "powerChart.profiles";
+
+  function loadProfiles(){
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return { activeId: null, byId: {} };
+    try { return JSON.parse(raw); } catch(e){ return { activeId: null, byId: {} }; }
+  }
+  function saveProfiles(state){
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(state));
+  }
+  function ensureDefaultProfile(){
+    let state = loadProfiles();
+    if (!state.activeId || !state.byId[state.activeId]){
+      const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+      state.byId[id] = { username: "Player One", pfp: null, enabledAttrs: ["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"], theme: {primary:"#1db954", alpha:25} };
+      state.activeId = id;
+      saveProfiles(state);
+    }
+    return state;
+  }
+  function getActiveProfile(){
+    const state = ensureDefaultProfile();
+    return { id: state.activeId, ...state.byId[state.activeId] };
+  }
+  function setActiveProfile(id){
+    const state = loadProfiles();
+    if (state.byId[id]){ state.activeId = id; saveProfiles(state); return true; }
+    return false;
+  }
+  function upsertProfile(id, data){
+    const state = loadProfiles();
+    if (!id){
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    }
+    state.byId[id] = { ...(state.byId[id]||{}), ...data };
+    if (!state.activeId) state.activeId = id;
+    saveProfiles(state);
+    return id;
+  }
+  function deleteProfile(id){
+    const state = loadProfiles();
+    delete state.byId[id];
+    if (state.activeId === id){
+      state.activeId = Object.keys(state.byId)[0] || null;
+    }
+    saveProfiles(state);
+    // purge per-profile keys
+    Object.keys(localStorage).forEach(k=>{
+      if (k.endsWith("."+id)) localStorage.removeItem(k);
+    });
+  }
+  function key(base){ const {id} = getActiveProfile(); return `${base}.${id}`; }
+  function keyFor(base, id){ return `${base}.${id}`; }
+
+  return { loadProfiles, saveProfiles, ensureDefaultProfile, getActiveProfile, setActiveProfile, upsertProfile, deleteProfile, key, keyFor };
+})();
+</script>
+
+<main>
+  <div class="grid">
+    <div class="panel">
+      <h2>Active Profile</h2>
+      <div id="activeCard" class="row">
+        <div class="left">
+          <img id="activePfp" class="pfp" src="" alt="pfp">
+          <div>
+            <div id="activeName">—</div>
+            <div class="muted" id="activeId">—</div>
+          </div>
+        </div>
+        <div class="actions">
+          <a class="btn" href="Results.html">Results</a>
+          <a class="btn" href="Data.html">Your Data</a>
+        </div>
+      </div>
+
+      <h2 style="margin-top:14px">Create / Edit</h2>
+      <div class="inputs">
+        <div>
+          <label class="muted">Username</label>
+          <input id="username" type="text" placeholder="Your name">
+        </div>
+        <div>
+          <label class="muted">Profile Picture</label><br>
+          <input id="pfpFile" type="file" accept="image/*">
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <div class="muted">Attributes to track</div>
+        <div class="attrs" id="attrs"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="saveBtn">Save Profile</button>
+        <button class="btn" id="newBtn">New Profile</button>
+        <button class="btn" id="deleteBtn">Delete Profile</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>All Profiles</h2>
+      <div id="list" class="list"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const ALL_ATTRS = ["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"];
+PC.ensureDefaultProfile();
+
+const usernameEl = document.getElementById('username');
+const pfpFileEl = document.getElementById('pfpFile');
+const listEl = document.getElementById('list');
+const attrsEl = document.getElementById('attrs');
+const activeName = document.getElementById('activeName');
+const activeId = document.getElementById('activeId');
+const activePfp = document.getElementById('activePfp');
+
+function renderAttrs(selected){
+  attrsEl.innerHTML = "";
+  ALL_ATTRS.forEach(a=>{
+    const id = "attr_"+a.replace(/\s/g,"_");
+    const wrap = document.createElement('label'); wrap.className="chk";
+    wrap.innerHTML = `<input type="checkbox" id="${id}" ${selected.includes(a)?'checked':''}> <span>${a}</span>`;
+    attrsEl.appendChild(wrap);
+  });
+}
+
+function dataURLFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = ()=> resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function loadActive(){
+  const ap = PC.getActiveProfile();
+  activeName.textContent = ap.username || "Player One";
+  activeId.textContent = ap.id;
+  if (ap.pfp){ activePfp.src = ap.pfp; activePfp.style.background = ""; } else { activePfp.src = ""; activePfp.style.background = "linear-gradient(135deg,#00a8ff,#1db954)"; }
+  usernameEl.value = ap.username || "";
+  renderAttrs(ap.enabledAttrs || ALL_ATTRS.slice());
+}
+loadActive();
+
+function renderList(){
+  const state = PC.loadProfiles();
+  listEl.innerHTML = "";
+  Object.entries(state.byId).forEach(([id,p])=>{
+    const row = document.createElement('div'); row.className = "row";
+    const psrc = p.pfp ? p.pfp : "";
+    row.innerHTML = `
+      <div class="left">
+        <img class="pfp" src="${psrc}" alt="pfp">
+        <div>
+          <div>${p.username || 'Unnamed'}</div>
+          <div class="muted">${id}</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" data-act="set" data-id="${id}">Set Active</button>
+      </div>
+    `;
+    listEl.appendChild(row);
+  });
+  listEl.querySelectorAll('button[data-act="set"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      PC.setActiveProfile(btn.dataset.id);
+      loadActive(); renderList();
+      alert("Active profile switched.");
+    });
+  });
+}
+renderList();
+
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const ap = PC.getActiveProfile();
+  let pfpData = ap.pfp;
+  if (pfpFileEl.files && pfpFileEl.files[0]){
+    pfpData = await dataURLFromFile(pfpFileEl.files[0]);
+  }
+  const selected = Array.from(attrsEl.querySelectorAll('input[type="checkbox"]')).filter(x=>x.checked).map(x=>x.nextElementSibling.textContent);
+  PC.upsertProfile(ap.id, { username: usernameEl.value || "Player One", pfp: pfpData, enabledAttrs: selected });
+  loadActive(); renderList();
+  alert("Profile saved ✓");
+});
+
+document.getElementById('newBtn').addEventListener('click', ()=>{
+  const id = PC.upsertProfile(null, { username: "New Player", pfp: null, enabledAttrs: ALL_ATTRS.slice(), theme:{primary:"#1db954", alpha:25} });
+  PC.setActiveProfile(id);
+  loadActive(); renderList();
+});
+
+document.getElementById('deleteBtn').addEventListener('click', ()=>{
+  const ap = PC.getActiveProfile();
+  if (confirm("Delete this profile? This removes its saved chart and metrics.")){
+    PC.deleteProfile(ap.id);
+    PC.ensureDefaultProfile();
+    loadActive(); renderList();
+  }
+});
+</script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    });
+  }
+  </script>
+</body>
+</html>

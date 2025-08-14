@@ -1,0 +1,301 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Chart · Results</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0f0f10; --panel:#151a1c; --ink:#eaf2f7; --muted:#9fb0bd; --radius:16px; --ring:#25323a; }
+  body { background-color: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; }
+  main { display:flex; flex-direction:column; align-items:center; padding: 72px 20px 30px; }
+  h1 { font-weight: 700; font-size: 2rem; margin-bottom: 10px; text-align: center; }
+  .meta { color: var(--muted); margin-bottom: 22px; font-size: .95rem }
+  .results-container {
+    display:flex; flex-direction:row; align-items:flex-start; gap:24px; flex-wrap:wrap; justify-content:center;
+    background: linear-gradient(180deg,#151a1d, #0f1214); padding:22px 24px; border-radius: var(--radius);
+    border: 1px solid var(--ring); box-shadow: 0 16px 50px rgba(0,0,0,0.45);
+  }
+  /* responsive canvas: smaller on phones */
+  canvas { max-width: min(90vw, 520px); max-height: 520px; }
+  @media (max-width: 480px){
+    canvas{ max-width: 92vw; max-height: 380px; }
+  }
+  .score-list { display:grid; gap:10px; font-size:16px; min-width:240px; }
+  .score-item { background-color:#0f1417; padding:10px 12px; border-radius:12px; border:1px solid var(--ring);
+    display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+  .badge{ font-weight:700; padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(0,0,0,.1); display:inline-block; min-width:26px; text-align:center; color:#000; }
+  .btns{ margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center }
+  button { padding:11px 16px; border:1px solid var(--ring); background-color:#10161a; color:var(--ink); cursor:pointer; font-size:15px; border-radius:12px; transition:.2s; font-weight:600; }
+  button:hover { border-color:#2f4654; transform: translateY(-1px); }
+  .muted{ color: var(--muted); font-size:.9rem }
+  .topbar{ position:fixed; top:0; left:0; right:0; height:56px; display:flex; align-items:center; justify-content:space-between; padding:0 14px; backdrop-filter: blur(6px); background: rgba(15,16,17,.35); border-bottom:1px solid rgba(37,50,58,.35); z-index:20; }
+  .avatar{ width:36px; height:36px; border-radius:999px; background:linear-gradient(135deg,#00a8ff,#1db954); border:1px solid rgba(255,255,255,.15); display:grid; place-items:center; font-weight:800; font-size:.8rem; cursor:pointer; overflow:hidden }
+  .avatar img{ width:100%; height:100%; object-fit:cover }
+  .menu{ position:absolute; top:50px; right:10px; background:#0f1417; border:1px solid var(--ring); border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.5); min-width:190px; display:none; }
+  .menu a{ display:block; padding:10px 12px; color:var(--ink); text-decoration:none; font-size:.95rem; }
+  .menu a:hover{ background:#11181d; }
+
+  /* compact toggles bottom-right */
+  .fab{ position:fixed; right:14px; z-index:15; width:40px; height:40px; border-radius:12px; border:1px solid var(--ring); background:#0f1417; display:grid; place-items:center; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+  #colorToggle{ bottom:14px; }
+  #attrsToggle{ bottom:62px; }
+  .pop{ position:fixed; right:14px; width:220px; padding:10px; border-radius:12px; background:#0f1417; border:1px solid var(--ring); box-shadow:0 12px 40px rgba(0,0,0,.55); display:none; z-index:15; }
+  #colorPop{ bottom:64px; }
+  #attrsPop{ bottom:112px; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:6px 0; }
+  .tiny{ font-size:12px; color:var(--muted) }
+  .alpha{ width:120px; }
+  .fullcolor{ width:100%; height:34px; border:none; background:transparent; cursor:pointer; padding:0; }
+  .attr-list{ display:grid; grid-template-columns:1fr; gap:6px; max-height:200px; overflow:auto }
+  label.chk{ display:flex; gap:8px; align-items:center; background:#0f1417; border:1px solid var(--ring); border-radius:10px; padding:6px 8px; }
+</style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1db954">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+  <div class="topbar">
+    <div class="muted" id="who"></div>
+    <div style="display:flex; align-items:center; gap:8px">
+      <a class="muted" href="Profiles.html" style="text-decoration:none">Profiles</a>
+      <div id="profileBtn" class="avatar" title="Profile"><span>PC</span></div>
+      <div id="profileMenu" class="menu">
+        <a href="Profiles.html">Manage Profiles</a>
+        <a href="Data.html">Your Data</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attribute toggle -->
+  <div class="fab" id="attrsToggle" title="Attributes">◎</div>
+  <div class="pop" id="attrsPop">
+    <div class="tiny">Attributes</div>
+    <div id="attrList" class="attr-list"></div>
+  </div>
+
+  <!-- Color toggle -->
+  <div class="fab" id="colorToggle" title="Chart color"><span style="transform:rotate(90deg)">›</span></div>
+  <div class="pop" id="colorPop">
+    <div class="row"><span class="tiny">Color</span><input id="primaryPicker" class="fullcolor" type="color" value="#1db954"></div>
+    <div class="row"><span class="tiny">Fill</span><input id="alphaRange" class="alpha" type="range" min="5" max="70" step="1" value="25"></div>
+  </div>
+
+  <main>
+    <h1>Your Power Chart</h1>
+    <div class="meta" id="metaLine">Alpha</div>
+
+    <div class="results-container">
+      <canvas id="resultsChart"></canvas>
+      <div class="score-list" id="scoreList"></div>
+    </div>
+
+    <div class="btns">
+      <button onclick="window.location.href='Quiz.html'">Retake Quiz</button>
+      <button id="downloadBtn">Download PNG</button>
+      <button id="clearBtn" title="Clears saved results">Clear Saved Result</button>
+    </div>
+
+    <p class="muted">Data is per-profile and stored locally.</p>
+  </main>
+
+<script>
+/* ===== Profiles helpers ===== */
+const PC = (function(){
+  const PROFILE_KEY = "powerChart.profiles";
+  function load(){ const raw = localStorage.getItem(PROFILE_KEY); try{ return raw?JSON.parse(raw):{activeId:null,byId:{}} }catch(e){ return {activeId:null,byId:{}} } }
+  function save(state){ localStorage.setItem(PROFILE_KEY, JSON.stringify(state)); }
+  function ensureDefault(){
+    let s = load();
+    if(!s.activeId || !s.byId[s.activeId]){
+      const id = (crypto.randomUUID?crypto.randomUUID():String(Date.now()));
+      s.byId[id] = { username:"Player One", pfp:null, enabledAttrs:["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"], theme:{primary:"#1db954",alpha:25} };
+      s.activeId = id; save(s);
+    } return s;
+  }
+  function active(){ const s = ensureDefault(); return { id:s.activeId, ...s.byId[s.activeId] }; }
+  function key(base){ const {id}=active(); return base+"."+id; }
+  function saveTheme(primary, alpha){ const s=ensureDefault(); const a=active(); s.byId[a.id].theme={primary, alpha:parseInt(alpha)}; save(s); }
+  function setAttrs(list){ const s=ensureDefault(); const a=active(); s.byId[a.id].enabledAttrs=list; save(s); }
+  function loadState(){ return ensureDefault(); }
+  return { active, key, saveTheme, setAttrs, loadState };
+})();
+
+// Topbar
+function renderTopbar(){
+  const p = PC.active();
+  document.getElementById('who').textContent = (p.username||'Player One') + ' — ' + (p.enabledAttrs?p.enabledAttrs.length:7) + ' attributes enabled';
+  const avatar = document.getElementById('profileBtn');
+  avatar.innerHTML = p.pfp ? '<img src="'+p.pfp+'">' : '<span>PC</span>';
+}
+renderTopbar();
+const profileBtn = document.getElementById('profileBtn');
+const profileMenu = document.getElementById('profileMenu');
+profileBtn.addEventListener('click', () => { profileMenu.style.display = profileMenu.style.display === 'block' ? 'none' : 'block'; });
+document.addEventListener('click', (e)=>{ if(!profileMenu.contains(e.target) && e.target!==profileBtn){ profileMenu.style.display='none'; } });
+
+// Theme (per profile)
+let { theme } = PC.active();
+let primary = (theme && theme.primary) || "#1db954";
+let alpha = (theme && theme.alpha!=null) ? theme.alpha : 25;
+const primaryPicker = document.getElementById('primaryPicker');
+const alphaRange = document.getElementById('alphaRange');
+primaryPicker.value = primary; alphaRange.value = alpha;
+function hexToRGBA(hex, a){
+  let c = hex.replace("#",""); if (c.length===3){ c = c.split("").map(x=>x+x).join(""); }
+  const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+document.getElementById('colorToggle').addEventListener('click', ()=>{
+  const p = document.getElementById('colorPop'); p.style.display = p.style.display==='block' ? 'none' : 'block';
+});
+document.addEventListener('click', (e)=>{
+  const p = document.getElementById('colorPop');
+  if(!p.contains(e.target) && e.target.id!=='colorToggle' && e.target.id!=='primaryPicker'){ p.style.display='none'; }
+});
+primaryPicker.addEventListener('input', (e)=>{ primary = e.target.value; PC.saveTheme(primary, alpha); rebuild(); });
+alphaRange.addEventListener('input', (e)=>{ alpha = parseInt(e.target.value,10); PC.saveTheme(primary, alpha); rebuild(); });
+
+// Attributes (per profile)
+const ALL = ["Intellect","Religion","Strength","Endurance","Social Life","Mental Health","Career"];
+const attrsToggle = document.getElementById('attrsToggle');
+const attrsPop = document.getElementById('attrsPop');
+const attrList = document.getElementById('attrList');
+attrsToggle.addEventListener('click', ()=>{ attrsPop.style.display = attrsPop.style.display==='block' ? 'none' : 'block'; });
+document.addEventListener('click', (e)=>{ if(!attrsPop.contains(e.target) && e.target.id!=='attrsToggle'){ attrsPop.style.display='none'; } });
+function renderAttrList(){
+  const ap = PC.active();
+  attrList.innerHTML = "";
+  (ALL).forEach(a=>{
+    const id = "chk_"+a.replace(/\s/g,"_");
+    const wrap = document.createElement('label'); wrap.className="chk";
+    const chk = document.createElement('input'); chk.type="checkbox"; chk.id=id; chk.checked = (ap.enabledAttrs||ALL).includes(a);
+    const sp = document.createElement('span'); sp.textContent = a;
+    wrap.appendChild(chk); wrap.appendChild(sp); attrList.appendChild(wrap);
+    chk.addEventListener('change', ()=>{
+      const list = new Set((PC.active().enabledAttrs)||ALL);
+      if (chk.checked) list.add(a); else list.delete(a);
+      PC.setAttrs(Array.from(list)); renderTopbar(); rebuild();
+    });
+  });
+}
+renderAttrList();
+
+// Chart + list
+let chart = null;
+function gradeFromAverage(avg1to6){
+  const pct = Math.max(0, Math.min(100, Math.round(((avg1to6 - 1) / 5) * 100)));
+  if (pct >= 95) return {grade:"S", color:"#ffd700", pct};
+  if (pct >= 85) return {grade:"A", color:primary, pct};
+  if (pct >= 75) return {grade:"B", color:"#21bf73", pct};
+  if (pct >= 65) return {grade:"C", color:"#3ea0ff", pct};
+  if (pct >= 50) return {grade:"D", color:"#ffb020", pct};
+  if (pct >= 35) return {grade:"E", color:"#ff6b6b", pct};
+  return {grade:"F", color:"#ff4d4f", pct};
+}
+
+// Abbreviation: only Mental Health -> Mental (as requested)
+function labelForChart(label){
+  if (label === "Mental Health") return "Mental";
+  return label;
+}
+
+function rebuild(){
+  const ap = PC.active();
+  // data
+  const labelsSrc = ap.enabledAttrs && ap.enabledAttrs.length ? ap.enabledAttrs : ALL;
+  const latest = JSON.parse(localStorage.getItem(PC.key("powerChart.latest")) || "null");
+  const legacy = JSON.parse(localStorage.getItem("quizScores") || "{}");
+  let averages = labelsSrc.map(label => (latest && latest.averages ? (latest.averages[label] ?? (legacy[label]||0)) : (legacy[label]||0)));
+  let grades = latest && latest.grades ? latest.grades : {};
+  let normalized = latest && latest.normalized ? latest.normalized : {};
+  let timestamp = latest && latest.timestamp ? latest.timestamp : null;
+
+  if (timestamp){
+    const dt = new Date(timestamp);
+    const nice = dt.toLocaleString(undefined, {year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit"});
+    document.getElementById("metaLine").textContent = `Recorded ${nice}`;
+  }
+
+  // score list
+  const scoreListDiv = document.getElementById("scoreList");
+  scoreListDiv.innerHTML = "";
+  labelsSrc.forEach((label, i) => {
+    const avg = (averages[i] || 0);
+    const gInfo = gradeFromAverage(avg);
+    const g = (grades && grades[label]) || gInfo.grade;
+    const pct = (normalized && normalized[label] != null) ? normalized[label] : gInfo.pct;
+    const color = gInfo.color;
+    const item = document.createElement("div");
+    item.className = "score-item";
+    item.innerHTML = `<div><strong>${label}</strong><div class="muted">${pct}%</div></div>
+                      <span class="badge" style="background:${color}">${g}</span>`;
+    scoreListDiv.appendChild(item);
+  });
+
+  // chart labels WITHOUT grade letters; with Mental abbreviation
+  const chartLabels = labelsSrc.map(l => labelForChart(l));
+
+  const ctx = document.getElementById("resultsChart").getContext("2d");
+  if (chart){ chart.destroy(); }
+  chart = new Chart(ctx, {
+    type: "radar",
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: "Your Stats (0–100)",
+        data: labelsSrc.map((_, i) => Math.max(0, Math.min(100, Math.round(((averages[i]||0) - 1) / 5 * 100)))),
+        borderColor: primary,
+        backgroundColor: hexToRGBA(primary, alpha/100),
+        pointBackgroundColor: primary,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      animation: { duration: 400 },
+      scales: {
+        r: {
+          min: 0, max: 100, ticks: { display: false },
+          grid: { color: "rgba(255,255,255,0.15)" },
+          angleLines: { color: "rgba(255,255,255,0.3)" },
+          pointLabels: {
+            color: "white",
+            font: ctx => ({ size: ctx.chart.width < 420 ? 10 : 14, weight: 600 })
+          }
+        }
+      },
+      plugins: { legend: { labels: { color: "white", font: { weight: 600, size: 14 } } } }
+    }
+  });
+}
+rebuild();
+
+// Download & Clear
+document.getElementById("downloadBtn").addEventListener("click", ()=>{
+  const link = document.createElement("a");
+  link.download = "power-chart.png";
+  link.href = chart.toBase64Image();
+  link.click();
+});
+document.getElementById("clearBtn").addEventListener("click", ()=>{
+  localStorage.removeItem(PC.key("powerChart.latest"));
+  alert("Saved result cleared for this profile. Retake the quiz or fill Your Data.");
+  rebuild();
+});
+
+// Rebuild on resize to adjust label font
+window.addEventListener('resize', rebuild);
+</script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    });
+  }
+  </script>
+</body>
+</html>
