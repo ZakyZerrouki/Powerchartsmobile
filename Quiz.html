@@ -7,7 +7,10 @@
 <style>
   :root{ --bg:#0d0f10; --panel:#14181b; --ink:#e7f1f7; --muted:#9fb0bd; --accent:#1db954; --accent-2:#00a8ff; --radius:14px; }
   *{box-sizing:border-box}
-  body { background-color: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; padding: 20px; }
+  body { background-color: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; padding: 20px; opacity:0; animation:fadeIn .4s ease forwards; }
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  a.home{position:fixed; top:20px; left:20px; text-decoration:none; color:var(--ink); font-weight:600;}
+  a.home:active{transform:translateY(1px);}
   #quiz-container { background: linear-gradient(180deg,#151a1d, #0f1214); border: 1px solid #24313a; padding: 22px; border-radius: var(--radius); width: 92%; max-width: 760px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
   h1{ margin:6px 0 2px; font-size: 1.5rem; letter-spacing: 0.3px; }
   .kicker{color:var(--muted); font-size:.9rem; margin-bottom:18px}
@@ -27,6 +30,7 @@
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 </head>
 <body>
+<a class="home" href="index.html" title="Home">← Home</a>
 
 <div id="quiz-container">
   <div class="kicker">Alpha · Demo</div>
